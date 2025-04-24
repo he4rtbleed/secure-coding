@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}서버 오류{% endblock %}
+{% block content %}
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card text-center">
+        <div class="card-header bg-danger text-white">
+          <h2>서버 오류</h2>
+        </div>
+        <div class="card-body">
+          <div class="display-1 text-danger mb-4">
+            <i class="bi bi-x-circle"></i> 500
+          </div>
+          <h3 class="card-title mb-4">서버에 문제가 발생했습니다.</h3>
+          <p class="card-text mb-4">
+            죄송합니다. 서버 내부 오류로 인해 요청을 처리할 수 없습니다.
+            잠시 후 다시 시도해주세요.
+          </p>
+          <div class="d-grid gap-2 col-6 mx-auto">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">홈으로 돌아가기</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

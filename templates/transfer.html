@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}송금{% endblock %}
+{% block content %}
+<div class="container mt-5">
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h2>송금하기</h2>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-info mb-4">
+            <strong>내 잔액:</strong> {{ user.balance }}원
+          </div>
+          
+          {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+          {% endif %}
+          
+          {% if success %}
+            <div class="alert alert-success">{{ success }}</div>
+          {% endif %}
+          
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+              <label for="receiver_username" class="form-label">수신자 아이디</label>
+              <input type="text" class="form-control" id="receiver_username" name="receiver_username" required>
+            </div>
+            <div class="mb-3">
+              <label for="amount" class="form-label">금액</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="amount" name="amount" min="1" max="{{ user.balance }}" required>
+                <span class="input-group-text">원</span>
+              </div>
+            </div>
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary">송금하기</button>
+              <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">취소</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h2>최근 거래 내역</h2>
+        </div>
+        <div class="card-body">
+          {% if transactions %}
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>날짜</th>
+                    <th>유형</th>
+                    <th>상대방</th>
+                    <th>금액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for transaction in transactions %}
+                    <tr>
+                      <td>{{ transaction.timestamp }}</td>
+                      <td>
+                        {% if transaction.sender_id == user.id %}
+                          <span class="badge bg-danger">출금</span>
+                        {% else %}
+                          <span class="badge bg-success">입금</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if transaction.sender_id == user.id %}
+                          {{ transaction.receiver_username }}
+                        {% else %}
+                          {{ transaction.sender_username }}
+                        {% endif %}
+                      </td>
+                      <td class="text-{% if transaction.sender_id == user.id %}danger{% else %}success{% endif %}">
+                        {% if transaction.sender_id == user.id %}-{% else %}+{% endif %}{{ transaction.amount }}원
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="alert alert-info">거래 내역이 없습니다.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

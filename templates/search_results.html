@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}검색 결과{% endblock %}
+{% block content %}
+<div class="container mt-5">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h2 class="mb-4">검색 결과: "{{ keyword }}"</h2>
+      
+      <form action="{{ url_for('search') }}" method="get" class="mb-4">
+        <div class="input-group">
+          <input type="text" class="form-control" name="keyword" value="{{ keyword }}" placeholder="상품명, 설명으로 검색">
+          <button class="btn btn-primary" type="submit">검색</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div class="row">
+    {% if products %}
+      {% for product in products %}
+        <div class="col-md-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title">{{ product.title }}</h5>
+              <p class="card-text text-truncate">{{ product.description }}</p>
+              <p class="card-text"><strong>{{ product.price }}원</strong></p>
+              <a href="{{ url_for('view_product', product_id=product.id) }}" class="btn btn-outline-primary">상세보기</a>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="col-12">
+        <div class="alert alert-info">
+          "{{ keyword }}"에 대한 검색 결과가 없습니다.
+        </div>
+      </div>
+    {% endif %}
+  </div>
+  
+  <div class="row mt-3">
+    <div class="col-12">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">목록으로 돌아가기</a>
+    </div>
+  </div>
+</div>
+{% endblock %} 

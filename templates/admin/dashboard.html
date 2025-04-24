@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}관리자 대시보드{% endblock %}
+{% block content %}
+<div class="container mt-5">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h2>관리자 대시보드</h2>
+      <p class="text-muted">시스템 관리 및 모니터링</p>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white mb-3">
+        <div class="card-body">
+          <h5 class="card-title">사용자</h5>
+          <p class="card-text display-4">{{ stats.user_count }}</p>
+          <a href="{{ url_for('admin_users') }}" class="btn btn-light">사용자 관리</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-success text-white mb-3">
+        <div class="card-body">
+          <h5 class="card-title">상품</h5>
+          <p class="card-text display-4">{{ stats.product_count }}</p>
+          <a href="{{ url_for('admin_products') }}" class="btn btn-light">상품 관리</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-warning text-dark mb-3">
+        <div class="card-body">
+          <h5 class="card-title">처리할 신고</h5>
+          <p class="card-text display-4">{{ stats.pending_reports }}</p>
+          <a href="{{ url_for('admin_reports') }}" class="btn btn-dark">신고 관리</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-info text-white mb-3">
+        <div class="card-body">
+          <h5 class="card-title">거래 내역</h5>
+          <p class="card-text display-4">{{ stats.transaction_count }}</p>
+          <a href="{{ url_for('admin_transactions') }}" class="btn btn-light">거래 조회</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h3>관리자 메뉴</h3>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3 mb-3">
+              <a href="{{ url_for('admin_users') }}" class="btn btn-outline-primary d-block">사용자 관리</a>
+            </div>
+            <div class="col-md-3 mb-3">
+              <a href="{{ url_for('admin_products') }}" class="btn btn-outline-success d-block">상품 관리</a>
+            </div>
+            <div class="col-md-3 mb-3">
+              <a href="{{ url_for('admin_reports') }}" class="btn btn-outline-warning d-block">신고 관리</a>
+            </div>
+            <div class="col-md-3 mb-3">
+              <a href="{{ url_for('admin_transactions') }}" class="btn btn-outline-info d-block">거래 내역</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">일반 대시보드로 돌아가기</a>
+    </div>
+  </div>
+</div>
+{% endblock %} 

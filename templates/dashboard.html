@@ -1,42 +1,130 @@
 {% extends "base.html" %}
 {% block title %}대시보드{% endblock %}
 {% block content %}
-<h2>대시보드</h2>
-<h3>등록된 상품</h3>
-<ul>
-  {% for product in products %}
-    <li>
-      <a href="{{ url_for('view_product', product_id=product.id) }}">{{ product.title }}</a>
-      - 가격: {{ product.price }}
-    </li>
-  {% endfor %}
-</ul>
-<p><a href="{{ url_for('new_product') }}">새 상품 등록</a></p>
+<div class="container mt-5">
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <h2>안전한 중고거래</h2>
+      <p class="text-muted">{{ products|length }}개의 상품이 등록되어 있습니다.</p>
+    </div>
+    <div class="col-md-6">
+      <!-- 검색 폼 -->
+      <form action="{{ url_for('search') }}" method="get" class="mb-4">
+        <div class="input-group">
+          <input type="text" class="form-control" name="keyword" placeholder="상품명, 설명으로 검색">
+          <button class="btn btn-primary" type="submit">검색</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-<h3>실시간 채팅</h3>
-<div id="chat">
-  <ul id="messages"></ul>
-  <input id="chat_input" type="text" placeholder="메시지를 입력하세요">
-  <button onclick="sendMessage()">전송</button>
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>등록된 상품</h3>
+        <a href="{{ url_for('new_product') }}" class="btn btn-success">새 상품 등록</a>
+      </div>
+      
+      <!-- 상품 목록 카드 형식으로 표시 -->
+      <div class="row">
+        {% if products %}
+          {% for product in products %}
+            <div class="col-md-4 mb-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">{{ product.title }}</h5>
+                  <p class="card-text text-truncate">{{ product.description }}</p>
+                  <p class="card-text"><strong>{{ product.price }}원</strong></p>
+                  <a href="{{ url_for('view_product', product_id=product.id) }}" class="btn btn-outline-primary">상세보기</a>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="col-12">
+            <div class="alert alert-info">
+              등록된 상품이 없습니다.
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 실시간 채팅 섹션 -->
+  <div class="row mt-5">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h3>실시간 채팅</h3>
+        </div>
+        <div class="card-body">
+          <div id="chat">
+            <div id="messages" class="border p-3 mb-3" style="height: 300px; overflow-y: auto;"></div>
+            <div class="input-group">
+              <input id="chat_input" type="text" class="form-control" placeholder="메시지를 입력하세요">
+              <button class="btn btn-primary" onclick="sendMessage()">전송</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
 <script type="text/javascript">
-  var socket = io();
-  socket.on('connect', function() {
-    console.log("채팅 서버에 연결됨");
+  document.addEventListener('DOMContentLoaded', function() {
+    var socket = io();
+    var messagesContainer = document.getElementById('messages');
+    
+    socket.on('connect', function() {
+      console.log("채팅 서버에 연결됨");
+      // 연결 성공 메시지 표시
+      var item = document.createElement('div');
+      item.className = 'alert alert-success';
+      item.textContent = "채팅 서버에 연결되었습니다.";
+      messagesContainer.appendChild(item);
+    });
+    
+    socket.on('message', function(data) {
+      var item = document.createElement('div');
+      item.className = 'mb-2 p-2 border-bottom';
+      
+      var username = document.createElement('strong');
+      username.textContent = data.username + ": ";
+      
+      var message = document.createElement('span');
+      message.textContent = data.message;
+      
+      item.appendChild(username);
+      item.appendChild(message);
+      messagesContainer.appendChild(item);
+      
+      // 스크롤을 최하단으로 이동
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+    
+    // 엔터 키 이벤트
+    document.getElementById('chat_input').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
   });
-  socket.on('message', function(data) {
-    var messages = document.getElementById('messages');
-    var item = document.createElement('li');
-    item.textContent = data.username + ": " + data.message;
-    messages.appendChild(item);
-    window.scrollTo(0, document.body.scrollHeight);
-  });
+  
   function sendMessage() {
+    var socket = io();
     var input = document.getElementById('chat_input');
-    var message = input.value;
+    var message = input.value.trim();
+    
     if (message) {
-      socket.emit('send_message', { 'username': "{{ user.username }}", 'message': message });
+      socket.emit('send_message', { 
+        'username': "{{ user.username }}", 
+        'message': message 
+      });
       input.value = "";
     }
   }

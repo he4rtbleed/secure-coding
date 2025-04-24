@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}실시간 채팅{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">실시간 채팅</h5>
+                </div>
+                <div class="card-body chat-container" id="chatBox" style="height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted mb-3">
+                        <small>채팅이 시작되었습니다. 안전한 대화를 나누세요.</small>
+                    </div>
+                    <div id="messages">
+                        <!-- 이전 메시지 로드 -->
+                        {% if messages %}
+                            {% for message in messages %}
+                                <div class="message {% if message.user_id == session.get('user_id') %}my-message mb-2 text-end{% else %}other-message mb-2{% endif %}">
+                                    <div class="{% if message.user_id == session.get('user_id') %}alert alert-primary d-inline-block p-2 px-3{% else %}alert alert-secondary d-inline-block p-2 px-3{% endif %}">
+                                        {% if message.user_id != session.get('user_id') %}
+                                            <strong>{{ message.username }}</strong><br>
+                                        {% endif %}
+                                        {{ message.message }}
+                                        <div class="small text-muted mt-1">
+                                            {{ message.timestamp }}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <form id="messageForm" class="d-flex">
+                        <input type="text" id="message" class="form-control me-2" placeholder="메시지를 입력하세요..." autocomplete="off" required>
+                        <button type="submit" class="btn btn-primary">전송</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 소켓 연결
+        const socket = io();
+        const username = "{{ session.get('username', '익명') }}";
+        const userId = "{{ session.get('user_id', '') }}";
+        const messageForm = document.getElementById('messageForm');
+        const messageInput = document.getElementById('message');
+        const messagesDiv = document.getElementById('messages');
+        const chatBox = document.getElementById('chatBox');
+
+        // 메시지 전송 처리
+        messageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            if (message) {
+                // 메시지 객체 생성
+                const messageData = {
+                    user_id: userId,
+                    username: username,
+                    message: message,
+                    timestamp: new Date().toISOString()
+                };
+                
+                // 서버로 메시지 전송
+                socket.emit('send_message', messageData);
+                
+                // 입력 필드 초기화
+                messageInput.value = '';
+            }
+        });
+
+        // 메시지 수신 처리
+        socket.on('message', function(data) {
+            // 메시지 요소 생성
+            const messageElement = document.createElement('div');
+            messageElement.className = data.user_id === userId ? 
+                'message my-message mb-2 text-end' : 
+                'message other-message mb-2';
+            
+            // 메시지 시간 포맷팅
+            const messageTime = new Date(data.timestamp);
+            const timeString = messageTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            // 메시지 HTML 구성
+            messageElement.innerHTML = `
+                <div class="${data.user_id === userId ? 'alert alert-primary d-inline-block p-2 px-3' : 'alert alert-secondary d-inline-block p-2 px-3'}">
+                    ${data.user_id !== userId ? `<strong>${data.username}</strong><br>` : ''}
+                    ${escapeHtml(data.message)}
+                    <div class="small text-muted mt-1">${timeString}</div>
+                </div>
+            `;
+            
+            // 메시지 추가
+            messagesDiv.appendChild(messageElement);
+            
+            // 스크롤을 하단으로 이동
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
+
+        // HTML 이스케이프 함수 (XSS 방지)
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // 페이지 로드 시 스크롤을 하단으로 이동
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+</script>
+{% endblock %} 
