@@ -2,7 +2,10 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>{% block title %}My Market{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}안전한 중고거래 시스템{% endblock %}</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Socket.IO 클라이언트 라이브러리 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   <style>
@@ -83,31 +86,105 @@
       margin-bottom: 10px;
       background-color: #fafafa;
     }
+    .flash-message {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    .flash-message.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .flash-message.error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
   </style>
 </head>
 <body>
-  <nav>
-    {% if session.get('user_id') %}
-      <a href="{{ url_for('dashboard') }}">대시보드</a>
-      <a href="{{ url_for('profile') }}">프로필</a>
-      <a href="{{ url_for('report') }}">신고하기</a>
-      <a href="{{ url_for('logout') }}">로그아웃</a>
-    {% else %}
-      <a href="{{ url_for('login') }}">로그인</a>
-      <a href="{{ url_for('register') }}">회원가입</a>
-    {% endif %}
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('index') }}">안전한 중고거래</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          {% if session.user_id %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('dashboard') }}">대시보드</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('profile') }}">프로필</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('new_product') }}">상품등록</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('logout') }}">로그아웃</a>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('login') }}">로그인</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('register') }}">회원가입</a>
+          </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
   </nav>
-  <div class="container">
+  <div class="container mt-4">
     {% with messages = get_flashed_messages() %}
       {% if messages %}
-        <ul>
-          {% for message in messages %}
-            <li class="flash">{{ message }}</li>
-          {% endfor %}
-        </ul>
+        {% for message in messages %}
+          <div class="flash-message {{ 'success' if 'success' in message.lower() else 'error' }}">
+            {{ message }}
+          </div>
+        {% endfor %}
       {% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
   </div>
+  
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- CSRF 토큰 JavaScript에서 사용하기 위한 메타 태그 -->
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  
+  <script>
+    // CSRF 토큰을 AJAX 요청에 자동으로 추가하는 설정
+    // (사용하는 JavaScript 라이브러리에 따라 다를 수 있음)
+    document.addEventListener('DOMContentLoaded', function() {
+      // AJAX 요청 시 CSRF 토큰을 헤더에 추가
+      const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+      
+      // 예시: XMLHttpRequest에 대한 기본 설정
+      const oldXHR = window.XMLHttpRequest;
+      function newXHR() {
+        const xhr = new oldXHR();
+        const originalOpen = xhr.open;
+        xhr.open = function() {
+          originalOpen.apply(this, arguments);
+          this.setRequestHeader('X-CSRFToken', token);
+        };
+        return xhr;
+      }
+      window.XMLHttpRequest = newXHR;
+      
+      // SocketIO를 사용할 경우, connect 시 CSRF 토큰 포함
+      if (typeof io !== 'undefined') {
+        const socket = io.connect('/', {
+          extraHeaders: {
+            'X-CSRFToken': token
+          }
+        });
+      }
+    });
+  </script>
+  
+  {% block scripts %}{% endblock %}
 </body>
 </html>

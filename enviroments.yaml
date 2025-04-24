@@ -5,6 +5,16 @@ dependencies:
   - python=3.9
   - pip
   - pip:
-    - flask 
-    - flask-socketio
+    - flask==2.0.1 
+    - flask-socketio==5.1.1
     - flask-sqlalchemy
+    - flask-talisman==0.8.0
+    - pyOpenSSL==20.0.1
+    - cryptography==36.0.0
+    - bcrypt==3.2.0
+    - Flask-WTF==0.15.1
+    - beautifulsoup4==4.9.3
+    - markupsafe==2.0.1
+    - itsdangerous==2.0.1
+    - Werkzeug==2.0.1
+    - Jinja2==3.0.1

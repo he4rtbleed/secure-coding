@@ -1,11 +1,20 @@
 {% extends "base.html" %}
 {% block title %}프로필{% endblock %}
 {% block content %}
-<h2>프로필 관리</h2>
-<p>사용자명: {{ user.username }}</p>
-<form method="post">
-  소개글: <br>
-  <textarea name="bio" rows="4" cols="50">{{ user.bio or '' }}</textarea><br>
-  <button type="submit">프로필 업데이트</button>
-</form>
+<div class="container mt-5">
+    <h2>내 프로필</h2>
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+            <label for="username" class="form-label">사용자명</label>
+            <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly>
+        </div>
+        <div class="mb-3">
+            <label for="bio" class="form-label">자기소개</label>
+            <textarea class="form-control" id="bio" name="bio" rows="3">{{ user.bio or '' }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">저장</button>
+        <a href="{{ url_for('change_password') }}" class="btn btn-warning">비밀번호 변경</a>
+    </form>
+</div>
 {% endblock %}

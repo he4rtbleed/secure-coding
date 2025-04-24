@@ -1,12 +1,63 @@
 import sqlite3
 import uuid
+import os
+import secrets
+from datetime import timedelta, datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g
 from flask_socketio import SocketIO, send
+from flask_talisman import Talisman  # HTTPS 및 보안 헤더 설정을 위한 라이브러리 추가
+from flask_wtf.csrf import CSRFProtect  # CSRF 보호 추가
+import functools
+from utils.security import hash_password, verify_password, validate_password_strength, sanitize_input
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
+# 안전한 랜덤 시크릿 키 생성 (하드코딩된 시크릿 키 대신)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+# 세션 쿠키 설정
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF 방지
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)  # 세션 유효 시간 설정
+
+# CSRF 보호 활성화
+csrf = CSRFProtect(app)
+
 DATABASE = 'market.db'
-socketio = SocketIO(app)
+# SocketIO 설정 업데이트 - 웹소켓 HTTPS 지원
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Talisman을 사용하여 HTTPS 적용 (개발 환경에서는 필요시 비활성화)
+# 운영 환경에서는 force_https=True로 설정하여 HTTPS 강제 적용
+if os.environ.get('FLASK_ENV') == 'production':
+    talisman = Talisman(
+        app,
+        force_https=True,
+        content_security_policy={
+            'default-src': "'self'",
+            'script-src': "'self' 'unsafe-inline' cdnjs.cloudflare.com",
+            'style-src': "'self' 'unsafe-inline' cdn.jsdelivr.net",
+            'img-src': "'self' data:",
+            'font-src': "'self' cdn.jsdelivr.net",
+            'connect-src': "'self' wss: ws:",
+        },
+        content_security_policy_nonce_in=['script-src', 'style-src'],
+        session_cookie_secure=True,
+        session_cookie_http_only=True
+    )
+else:
+    # 개발 환경에서는 HTTPS 강제 적용 비활성화하고 CSP를 더 유연하게 설정
+    talisman = Talisman(
+        app,
+        force_https=False,
+        content_security_policy={
+            'default-src': ["'self'", '*'],
+            'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", '*'],
+            'style-src': ["'self'", "'unsafe-inline'", '*'],
+            'img-src': ["'self'", 'data:', '*'],
+            'font-src': ["'self'", '*'],
+            'connect-src': ["'self'", 'ws:', 'wss:', '*'],
+        },
+        content_security_policy_nonce_in=['script-src', 'style-src'],
+        session_cookie_http_only=True
+    )
 
 # 데이터베이스 연결 관리: 요청마다 연결 생성 후 사용, 종료 시 close
 def get_db():
@@ -68,8 +119,15 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
+        username = sanitize_input(request.form['username'])
         password = request.form['password']
+        
+        # 비밀번호 강도 검증
+        is_valid, message = validate_password_strength(password)
+        if not is_valid:
+            flash(message)
+            return redirect(url_for('register'))
+        
         db = get_db()
         cursor = db.cursor()
         # 중복 사용자 체크
@@ -77,9 +135,12 @@ def register():
         if cursor.fetchone() is not None:
             flash('이미 존재하는 사용자명입니다.')
             return redirect(url_for('register'))
+        
+        # 비밀번호 해싱 및 사용자 생성
+        hashed_password = hash_password(password)
         user_id = str(uuid.uuid4())
         cursor.execute("INSERT INTO user (id, username, password) VALUES (?, ?, ?)",
-                       (user_id, username, password))
+                       (user_id, username, hashed_password))
         db.commit()
         flash('회원가입이 완료되었습니다. 로그인 해주세요.')
         return redirect(url_for('login'))
@@ -89,14 +150,20 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
+        username = sanitize_input(request.form['username'])
         password = request.form['password']
         db = get_db()
         cursor = db.cursor()
-        cursor.execute("SELECT * FROM user WHERE username = ? AND password = ?", (username, password))
+        cursor.execute("SELECT * FROM user WHERE username = ?", (username,))
         user = cursor.fetchone()
-        if user:
+        
+        if user and verify_password(user['password'], password):
+            # 세션 고정 공격 방지: 로그인 시 세션 ID 재생성
+            session.clear()
             session['user_id'] = user['id']
+            # 세션에 로그인 시간 저장
+            session['login_time'] = datetime.now().timestamp()
+            session.permanent = True  # 세션 유지 시간 활성화
             flash('로그인 성공!')
             return redirect(url_for('dashboard'))
         else:
@@ -107,15 +174,36 @@ def login():
 # 로그아웃
 @app.route('/logout')
 def logout():
-    session.pop('user_id', None)
+    # 세션 완전히 제거
+    session.clear()
     flash('로그아웃되었습니다.')
     return redirect(url_for('index'))
 
+# 로그인 상태 확인 데코레이터
+def login_required(view):
+    @functools.wraps(view)
+    def wrapped_view(**kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        # 세션 타임아웃 확인 (30분 이상 활동이 없으면 세션 만료)
+        if 'login_time' in session:
+            login_time = session.get('login_time')
+            # 세션 유효 시간 확인
+            if datetime.now().timestamp() - login_time > 1800:  # 30분
+                session.clear()
+                flash('세션이 만료되었습니다. 다시 로그인해주세요.')
+                return redirect(url_for('login'))
+            # 활성 상태면 로그인 시간 갱신
+            session['login_time'] = datetime.now().timestamp()
+        
+        return view(**kwargs)
+    return wrapped_view
+
 # 대시보드: 사용자 정보와 전체 상품 리스트 표시
 @app.route('/dashboard')
+@login_required
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     db = get_db()
     cursor = db.cursor()
     # 현재 사용자 조회
@@ -128,9 +216,8 @@ def dashboard():
 
 # 프로필 페이지: bio 업데이트 가능
 @app.route('/profile', methods=['GET', 'POST'])
+@login_required
 def profile():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     db = get_db()
     cursor = db.cursor()
     if request.method == 'POST':
@@ -145,9 +232,8 @@ def profile():
 
 # 상품 등록
 @app.route('/product/new', methods=['GET', 'POST'])
+@login_required
 def new_product():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     if request.method == 'POST':
         title = request.form['title']
         description = request.form['description']
@@ -181,9 +267,8 @@ def view_product(product_id):
 
 # 신고하기
 @app.route('/report', methods=['GET', 'POST'])
+@login_required
 def report():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     if request.method == 'POST':
         target_id = request.form['target_id']
         reason = request.form['reason']
@@ -199,12 +284,54 @@ def report():
         return redirect(url_for('dashboard'))
     return render_template('report.html')
 
+# 비밀번호 변경
+@app.route('/change_password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        current_password = request.form['current_password']
+        new_password = request.form['new_password']
+        confirm_password = request.form['confirm_password']
+        
+        # 새 비밀번호와 확인 비밀번호 일치 여부 확인
+        if new_password != confirm_password:
+            flash('새 비밀번호와 확인 비밀번호가 일치하지 않습니다.')
+            return redirect(url_for('change_password'))
+        
+        # 새 비밀번호 강도 검증
+        is_valid, message = validate_password_strength(new_password)
+        if not is_valid:
+            flash(message)
+            return redirect(url_for('change_password'))
+        
+        # 현재 사용자 정보 조회
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT * FROM user WHERE id = ?", (session['user_id'],))
+        user = cursor.fetchone()
+        
+        # 현재 비밀번호 확인
+        if not verify_password(user['password'], current_password):
+            flash('현재 비밀번호가 올바르지 않습니다.')
+            return redirect(url_for('change_password'))
+        
+        # 비밀번호 해싱 및 업데이트
+        hashed_password = hash_password(new_password)
+        cursor.execute("UPDATE user SET password = ? WHERE id = ?", 
+                       (hashed_password, session['user_id']))
+        db.commit()
+        
+        flash('비밀번호가 성공적으로 변경되었습니다.')
+        return redirect(url_for('profile'))
+    
+    return render_template('change_password.html')
+
 # 실시간 채팅: 클라이언트가 메시지를 보내면 전체 브로드캐스트
 @socketio.on('send_message')
 def handle_send_message_event(data):
     data['message_id'] = str(uuid.uuid4())
     send(data, broadcast=True)
 
-if __name__ == '__main__':
-    init_db()  # 앱 컨텍스트 내에서 테이블 생성
-    socketio.run(app, debug=True)
+# 앱 컨텍스트 내에서 테이블 생성
+with app.app_context():
+    init_db()
