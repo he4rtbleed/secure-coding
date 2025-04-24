@@ -269,9 +269,22 @@ def view_product(product_id):
 @app.route('/report', methods=['GET', 'POST'])
 @login_required
 def report():
+    # URL에서 target_id 매개변수 가져오기
+    target_id = request.args.get('target_id', '')
+    
     if request.method == 'POST':
         target_id = request.form['target_id']
-        reason = request.form['reason']
+        reason = sanitize_input(request.form['reason'])
+        
+        # 입력값 검증
+        if not target_id or not reason:
+            flash('신고 대상과 사유를 모두 입력해주세요.')
+            return redirect(url_for('report'))
+            
+        if len(reason) < 10:
+            flash('신고 사유는 최소 10자 이상 입력해주세요.')
+            return redirect(url_for('report'))
+        
         db = get_db()
         cursor = db.cursor()
         report_id = str(uuid.uuid4())
@@ -282,7 +295,8 @@ def report():
         db.commit()
         flash('신고가 접수되었습니다.')
         return redirect(url_for('dashboard'))
-    return render_template('report.html')
+    
+    return render_template('report.html', target_id=target_id)
 
 # 비밀번호 변경
 @app.route('/change_password', methods=['GET', 'POST'])
@@ -331,6 +345,31 @@ def change_password():
 def handle_send_message_event(data):
     data['message_id'] = str(uuid.uuid4())
     send(data, broadcast=True)
+
+# 상품 검색
+@app.route('/search', methods=['GET'])
+def search():
+    # 키워드 가져오기
+    keyword = request.args.get('keyword', '')
+    
+    # 입력값 검증
+    keyword = sanitize_input(keyword)
+    
+    db = get_db()
+    cursor = db.cursor()
+    
+    # SQL 파라미터화 쿼리를 사용하여 SQL Injection 방지
+    # LIKE 절에 사용될 검색어 준비 (부분 일치 검색)
+    search_term = f"%{keyword}%"
+    
+    # 검색 쿼리 실행 (제목과 설명에서 검색)
+    cursor.execute(
+        "SELECT * FROM product WHERE title LIKE ? OR description LIKE ?",
+        (search_term, search_term)
+    )
+    products = cursor.fetchall()
+    
+    return render_template('search_results.html', products=products, keyword=keyword)
 
 # 앱 컨텍스트 내에서 테이블 생성
 with app.app_context():

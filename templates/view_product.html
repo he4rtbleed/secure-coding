@@ -1,8 +1,41 @@
 {% extends "base.html" %}
 {% block title %}상품 상세보기{% endblock %}
 {% block content %}
-<h2>{{ product.title }}</h2>
-<p>{{ product.description }}</p>
-<p>가격: {{ product.price }}</p>
-<p>판매자: {{ seller.username if seller else '알 수 없음' }}</p>
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="text-center">{{ product.title }}</h2>
+        </div>
+        <div class="card-body">
+          <div class="row mb-4">
+            <div class="col-12">
+              <h5 class="card-title mb-3">상품 설명</h5>
+              <p class="card-text">{{ product.description }}</p>
+            </div>
+          </div>
+          
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <h5 class="card-title">가격</h5>
+              <p class="card-text fw-bold fs-4">{{ product.price }}원</p>
+            </div>
+            <div class="col-md-6">
+              <h5 class="card-title">판매자</h5>
+              <p class="card-text">{{ seller.username if seller else '알 수 없음' }}</p>
+            </div>
+          </div>
+          
+          <div class="d-grid gap-2 mt-4">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">목록으로</a>
+            {% if session.user_id %}
+              <a href="{{ url_for('report') }}?target_id={{ product.id }}" class="btn btn-outline-danger">신고하기</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
