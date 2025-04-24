@@ -48,14 +48,14 @@ else:
         app,
         force_https=False,
         content_security_policy={
-            'default-src': ["'self'", '*'],
-            'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", '*'],
-            'style-src': ["'self'", "'unsafe-inline'", '*'],
-            'img-src': ["'self'", 'data:', '*'],
-            'font-src': ["'self'", '*'],
-            'connect-src': ["'self'", 'ws:', 'wss:', '*'],
+            'default-src': "'self'",
+            'script-src': "'self' 'nonce-%(csp_nonce)s' cdnjs.cloudflare.com",
+            'style-src': "'self' 'unsafe-inline' cdn.jsdelivr.net",
+            'img-src': "'self' data:",
+            'font-src': "'self' cdn.jsdelivr.net",
+            'connect-src': "'self' ws: wss: http: https:",
         },
-        content_security_policy_nonce_in=['script-src', 'style-src'],
+        content_security_policy_nonce_in=['script-src'],
         session_cookie_http_only=True
     )
 
@@ -291,10 +291,40 @@ def dashboard():
     # 현재 사용자 조회
     cursor.execute("SELECT * FROM user WHERE id = ?", (session['user_id'],))
     current_user = cursor.fetchone()
+    
+    # 사용자 이름 세션에 저장 (채팅용)
+    if current_user:
+        session['username'] = current_user['username']
+    
     # 모든 상품 조회
     cursor.execute("SELECT * FROM product")
     all_products = cursor.fetchall()
-    return render_template('dashboard.html', products=all_products, user=current_user)
+    
+    # 채팅 메시지 로드 (최근 20개)
+    try:
+        # 채팅 테이블이 존재하는지 확인하고 없으면 생성
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                username TEXT NOT NULL,
+                message TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("""
+            SELECT * FROM chat_messages 
+            ORDER BY timestamp DESC 
+            LIMIT 20
+        """)
+        messages = cursor.fetchall()
+        messages = list(reversed(messages))  # 시간순으로 정렬
+    except Exception as e:
+        print(f"채팅 메시지 로드 오류: {str(e)}")
+        messages = []
+    
+    return render_template('dashboard.html', products=all_products, user=current_user, messages=messages)
 
 # 프로필 페이지: bio 업데이트 가능
 @app.route('/profile', methods=['GET', 'POST'])
@@ -454,6 +484,8 @@ def change_password():
 # 실시간 채팅: 클라이언트가 메시지를 보내면 전체 브로드캐스트
 @socketio.on('send_message')
 def handle_send_message_event(data):
+    print(f"채팅 메시지 수신: {data}")
+    
     # 메시지 ID 생성
     data['message_id'] = str(uuid.uuid4())
     
@@ -463,10 +495,12 @@ def handle_send_message_event(data):
     # 유효성 검사: 필수 필드가 있는지 확인
     required_fields = ['user_id', 'username', 'message']
     if not all(field in data for field in required_fields):
+        print(f"필수 필드 누락: {data}")
         return
     
     # 빈 메시지 거부
     if not data['message'].strip():
+        print(f"빈 메시지 거부: {data}")
         return
     
     try:
@@ -489,10 +523,12 @@ def handle_send_message_event(data):
             (data['message_id'], data['user_id'], data['username'], data['message'])
         )
         db.commit()
+        print(f"메시지 저장 성공: {data['message_id']}")
     except Exception as e:
         print(f"메시지 저장 오류: {str(e)}")
     
     # 모든 클라이언트에게 메시지 브로드캐스트
+    print(f"메시지 브로드캐스트: {data}")
     send(data, broadcast=True)
 
 # 채팅 페이지
@@ -855,3 +891,8 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('errors/500.html'), 500
+
+# 메인 실행 부분
+if __name__ == '__main__':
+    # Flask 앱을 SocketIO로 실행 (웹소켓 지원)
+    socketio.run(app, debug=True, host='0.0.0.0')
